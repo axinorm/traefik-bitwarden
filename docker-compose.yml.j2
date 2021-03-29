@@ -1,0 +1,91 @@
+version: '3'
+
+services:
+  traefik:
+    image: traefik:v2.4
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - web
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./dynamic-conf.yml:/dynamic-conf.yml:ro
+      - ./ca.crt:/ca.crt:ro
+      - ./acme.json:/acme.json
+      {%- if os == "linux" %}
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /var/log/traefik:/var/log/traefik
+      {%- else %}
+      - ./traefik-log:/var/log/traefik
+      {%- endif %}
+
+  bitwarden:
+    image: bitwardenrs/server:1.19.0
+    restart: unless-stopped
+    container_name: bitwarden
+    volumes:
+      - bitwarden:/data
+      {%- if os == "linux" %}
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /var/log/bitwarden.log:/data/bitwarden.log
+      {%- else %}
+      - ./bitwarden-log/bitwarden.log:/data/bitwarden.log
+      {%- endif %}
+    env_file:
+      - bitwarden.env
+    depends_on:
+      - traefik
+      - postgres
+    networks:
+      - web
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bitwarden-ui.entrypoints=https"
+      - "traefik.http.routers.bitwarden-ui.rule=Host(`{{ url_traefik }}`)"
+      - "traefik.http.routers.bitwarden-ui.middlewares=tlsHeader@file"
+      - "traefik.http.routers.bitwarden-ui.tls=true"
+      - "traefik.http.routers.bitwarden-ui.tls.certresolver=http"
+      - "traefik.http.routers.bitwarden-ui.service=bitwarden-ui"
+      - "traefik.http.services.bitwarden-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.bitwarden-websocket.entrypoints=https"
+      - "traefik.http.routers.bitwarden-websocket.rule=Host(`{{ url_traefik }}`) && Path(`/notifications/hub`)"
+      - "traefik.http.routers.bitwarden-websocket.middlewares=tlsHeader@file"
+      - "traefik.http.routers.bitwarden-websocket.tls=true"
+      - "traefik.http.routers.bitwarden-websocket.tls.certresolver=http"
+      - "traefik.http.routers.bitwarden-websocket.service=bitwarden-websocket"
+      - "traefik.http.services.bitwarden-websocket.loadbalancer.server.port=3012"
+      - "traefik.docker.network=web"
+
+  postgres:
+    image: postgres:12.4-alpine
+    restart: unless-stopped
+    container_name: postgres
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./postgres-scripts:/docker-entrypoint-initdb.d
+      {%- if os == "linux" %}
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      {%- endif %}
+    env_file:
+      - postgres.env
+    networks:
+      - internal
+
+networks:
+  internal:
+  web:
+    external: true
+
+volumes:
+  bitwarden:
+  postgres:

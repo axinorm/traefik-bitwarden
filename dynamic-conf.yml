@@ -1,0 +1,21 @@
+http:
+  middlewares:
+    tlsHeader:
+      headers:
+        SSLRedirect: true
+        forceSTSHeader: true
+        STSSeconds: 315360000
+        STSIncludeSubdomains: true
+        STSPreload: true
+        browserXSSFilter: true
+        contentTypeNosniff: true
+        frameDeny: true
+        customFrameOptionsValue: SAMEORIGIN
+        featurePolicy: accelerometer 'none'; ambient-light-sensor 'none'; camera 'none'; geolocation 'none'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; usb 'none'; midi 'none'; sync-xhr 'none'; vr 'none'
+        referrerPolicy: strict-origin-when-cross-origin
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS13
+      sniStrict: true
